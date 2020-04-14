@@ -228,7 +228,7 @@ std::vector<Point*> Astar::getSurroundPoints(const Point* _point,
     surroundPoints.push_back(new Point(x, y));
   return surroundPoints;
 }
-const std::vector<std::vector<short>>
+static const std::vector<std::vector<short>>
     init_mapinfo_block =  // 0表示可以通过，1表示障碍物，这个和原版的地图是一样的，就是把0以外的数字都改成了1.
     {{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
       1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
