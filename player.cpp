@@ -207,24 +207,24 @@ bool Astar::isCanreach(const Point* point,
   }
 }
 //只保留上下左右四个方向，不然太容易卡住了呜呜呜
-std::vector<Point*> Astar::getSurroundPoints(const Point* point,
+std::vector<Point*> Astar::getSurroundPoints(const Point* _point,
                                              bool isIgnoreCorner) const {
   std::vector<Point*> surroundPoints;
-  int x = point->x - 1;
-  int y = point->y;
-  if (isCanreach(point, new Point(x, y), isIgnoreCorner))
+  int x = _point->x - 1;
+  int y = _point->y;
+  if (isCanreach(_point, new Point(x, y), isIgnoreCorner))
     surroundPoints.push_back(new Point(x, y));
-  x = point->x + 1;
-  y = point->y;
-  if (isCanreach(point, new Point(x, y), isIgnoreCorner))
+  x = _point->x + 1;
+  y = _point->y;
+  if (isCanreach(_point, new Point(x, y), isIgnoreCorner))
     surroundPoints.push_back(new Point(x, y));
-  x = point->x;
-  y = point->y + 1;
-  if (isCanreach(point, new Point(x, y), isIgnoreCorner))
+  x = _point->x;
+  y = _point->y + 1;
+  if (isCanreach(_point, new Point(x, y), isIgnoreCorner))
     surroundPoints.push_back(new Point(x, y));
-  x = point->x;
-  y = point->y - 1;
-  if (isCanreach(point, new Point(x, y), isIgnoreCorner))
+  x = _point->x;
+  y = _point->y - 1;
+  if (isCanreach(_point, new Point(x, y), isIgnoreCorner))
     surroundPoints.push_back(new Point(x, y));
   return surroundPoints;
 }
