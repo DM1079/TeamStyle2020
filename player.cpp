@@ -15,7 +15,6 @@ const int kCost2 = 9999; //斜移一格消耗
 const char dir[3][3] = { {'z','x','c' },{'a','s','d'},{'q','w','e'} };
 chrono::milliseconds time_200ms(200);
 chrono::milliseconds time_50ms(200);
-
 struct Point {
     int x, y; //点坐标，这里为了方便按照C++的数组来计算，x代表横排，y代表竖列
     int F, G, H; //F=G+H	
@@ -264,35 +263,72 @@ const std::vector<std::vector<short>> init_mapinfo_block =//0表示可以通过�
 
 Astar astar(init_mapinfo_block);
 
+void move_dir(char c,int i) //重载一下，i=1时只移动50ms表示时间，主要用于修改朝向。
+{
+    if (i == 1) {
+        switch (c)
+        {
+        case 'd':move(Protobuf::Direction::Right, 50);
+            this_thread::sleep_for(time_50ms);
+            break;
+        case 'e':move(Protobuf::Direction::RightUp, 50);
+            this_thread::sleep_for(time_50ms);
+            break;
+        case 'w':move(Protobuf::Direction::Up, 50);
+            this_thread::sleep_for(time_50ms);
+            break;
+        case 'q':move(Protobuf::Direction::LeftUp, 50);
+            this_thread::sleep_for(time_50ms);
+            break;
+        case 'a':move(Protobuf::Direction::Left, 50);
+            this_thread::sleep_for(time_50ms);
+            break;
+        case 'z':move(Protobuf::Direction::LeftDown, 50);
+            this_thread::sleep_for(time_50ms);
+            break;
+        case 'x':move(Protobuf::Direction::Down, 50);
+            this_thread::sleep_for(time_50ms);
+            break;
+        case 'c':move(Protobuf::Direction::RightDown, 50);
+            this_thread::sleep_for(time_50ms);
+            break;
+
+        default:
+            break;
+        }
+    }
+
+}
+
 void move_dir(char c) //按照c中表示的方向移动
 {
     switch (c)
     {
-    case 'd':move(Protobuf::Direction::Right, 200); 
+    case 'd':move(Protobuf::Direction::Right, 200);
         this_thread::sleep_for(time_200ms);
         break;
-    case 'e':move(Protobuf::Direction::RightUp, 265); 
-        this_thread::sleep_for(time_200ms);
-        this_thread::sleep_for(time_50ms);
-        break;
-    case 'w':move(Protobuf::Direction::Up, 200); 
-        this_thread::sleep_for(time_200ms);
-        break;
-    case 'q':move(Protobuf::Direction::LeftUp, 265); 
+    case 'e':move(Protobuf::Direction::RightUp, 265);
         this_thread::sleep_for(time_200ms);
         this_thread::sleep_for(time_50ms);
         break;
-    case 'a':move(Protobuf::Direction::Left, 200); 
+    case 'w':move(Protobuf::Direction::Up, 200);
         this_thread::sleep_for(time_200ms);
         break;
-    case 'z':move(Protobuf::Direction::LeftDown, 265); 
+    case 'q':move(Protobuf::Direction::LeftUp, 265);
         this_thread::sleep_for(time_200ms);
         this_thread::sleep_for(time_50ms);
         break;
-    case 'x':move(Protobuf::Direction::Down, 200); 
+    case 'a':move(Protobuf::Direction::Left, 200);
         this_thread::sleep_for(time_200ms);
         break;
-    case 'c':move(Protobuf::Direction::RightDown, 265); 
+    case 'z':move(Protobuf::Direction::LeftDown, 265);
+        this_thread::sleep_for(time_200ms);
+        this_thread::sleep_for(time_50ms);
+        break;
+    case 'x':move(Protobuf::Direction::Down, 200);
+        this_thread::sleep_for(time_200ms);
+        break;
+    case 'c':move(Protobuf::Direction::RightDown, 265);
         this_thread::sleep_for(time_200ms);
         this_thread::sleep_for(time_50ms);
         break;
@@ -398,6 +434,11 @@ void gotodest(Point &dest)
             y = dest.y-1;
         }
     }
+    if ((int)PlayerInfo.position.x == x && (int)PlayerInfo.position.y == y)//如果已经在目的地，没必要移动。
+    {
+        cout << "no need move" << endl;
+        return;
+    }
     while (1) {
         for (auto& lp : astar.GetPath(x, y, false))
         {
@@ -443,7 +484,7 @@ int throw_darkdish(int _label)//检查灶台上有无黑暗料理，如果有，
         if (i->blockType==3 && i->dish!=0)//如果发现灶台里面有菜
         {
             put(0, 0, TRUE);//先把手里的东西放脚下
-            move_dir(c);//确保朝向
+            move_dir(c,1);//确保朝向
             pick(FALSE, Block, 0);//尝试拾取
             this_thread::sleep_for(time_50ms);
             if (PlayerInfo.dish == 0)//说明没有拿到dish,也就是这个灶台正在烹饪
@@ -466,18 +507,35 @@ int throw_darkdish(int _label)//检查灶台上有无黑暗料理，如果有，
         }
     }
 }
-int** get_all_dish(int x, int y)//检查包括指定点（灶台）在内周围八格有无
+
+//先写一个只看灶台一格的试试，不然太难了
+
+int rawfood[51][3];//全局变量保平安，谁乐意传参啊hh
+//每一行是 {有无食材 有1 无0，食材坐标x,食材坐标y}，如果有不止一个食材，直接覆盖，无所谓。
+//第一行raw[0][0]=1,方便后面运算
+//如果食材在队友手上，坐标记0，0，如果在自己手里，记50，50
+//不如都先把食材扔下去吧？这样省事。
+
+void get_all_dish(int x, int y)//检查包括指定点（灶台）在内周围八格有无
 //返回一个0-51的数组，每个数字指示mapcell中是否有该食材，第0位为1时,说明什么都没有。
 {
-    int raw[51][3];//每一行是 {有无食材 有1 无0，食材坐标x,食材坐标y}，如果有不止一个食材，直接覆盖，无所谓。
-    //第一行raw[0][0]=1,方便后面运算
-    //如果食材在自己手上，坐标记0，0，如果在队友手里，记50，50
-    raw[0][0] = 1;
+    for (int i = 0; i <= 50; i++)
+    {
+        for (int j = 0; j <= 2; j++)
+        {
+            rawfood[i][j] = 0;//初始化
+        }
+    }
+    rawfood[0][0] = 1;//第一行raw[0][0]=1,方便后面运算
     list<Obj> l = MapInfo::get_mapcell(x, y);
     for (list<Obj>::iterator i = l.begin(); i != l.end(); i++)
     {
         if(i->dish!=0)//
-        { }
+        {
+            rawfood[i->dish][0] = 1;
+            rawfood[i->dish][0] = int(i->position.x);
+            rawfood[i->dish][0] = int(i->position.y);
+        }
         //////////////////////////////////////////////////////////
     }
 }
@@ -535,7 +593,7 @@ int  howtodolist[21][4] =//菜肴编号-20=行号
     {6,7,3,10}
 };
 
-int* get_candolist(int** rawfood)//size=0~26,rawfood[0]=1，rawfood为int[51][3],有无，x,y
+int* get_candolist()//size=0~26,rawfood[0]=1，rawfood为int[51][3],有无，x,y
 {
     int candolist[51]; //20-25为中间产物，26番茄炒蛋，27-40为成品菜，41-47为香锅，50位黑暗料理。
     for (int i = 0; i <= 50; i++)
@@ -552,10 +610,74 @@ int* get_candolist(int** rawfood)//size=0~26,rawfood[0]=1，rawfood为int[51][3]
     return candolist;
 }
 
-int makefood(int* candolist,int** rawfood) {
+int whichfood(int* candolist) {
+    list<DishType> tk = task_list;
+    int sum;
+    for (int i = 26; i <= 50; i++)//先看能不能制作成品菜
+    {
+        sum += candolist[i];
+    }
+    if (sum != 0) {
+        //优先制作任务列表里有的菜
+        for (list<DishType>::iterator i = tk.end(); i != tk.begin(); i--)
+        {
+            if (candolist[*i] == 1)return *i;
+        }
+
+        //如果都不在任务列表里，当你懒得考虑做什么菜，就随机一下,先看到哪个做哪个。
+        vector<int> random;
+        for (int i = 26; i <= 40; i++)
+        {
+            random.push_back(i);
+        }
+        random_shuffle(random.begin(), random.end());
+        for (vector<int>::iterator i = random.begin(); i != random.end(); i++)
+        {
+            if (candolist[*i] == 1) return *i;
+        }
+
+    }
+    else //一个成品菜都做不了，看看能不能合成中间产物,如果中间产物已经有了就算了不多做了。
+    {
+        if (candolist[20] == 1 && rawfood[20][0] != 1) return 20;//面粉》米饭》面条》番茄酱》奶油》面包
+        if (candolist[23] == 1 && rawfood[23][0] != 1) return 23;
+        if (candolist[24] == 1 && rawfood[24][0] != 1) return 24;
+        if (candolist[21] == 1 && rawfood[21][0] != 1) return 21;
+        if (candolist[25] == 1 && rawfood[25][0] != 1) return 25;
+        if (candolist[22] == 1 && rawfood[21][0] != 1) return 22;
+        return 0;
+    }
     return 0;
 }
+//const char dir[3][3] = { {'z','x','c' },{'a','s','d'},{'q','w','e'} };
+void makefood(int food)//传入目标的编号
+{
+    int row = food - 20;//行号
+    //首先查找howtodolist[21][4]={{需要的食材编号,最多四种，多的置0}}第0行对应20面粉。
+    for (int i = 0; i <= 4; i++)
+    {
+        int destraw = howtodolist[row][i];//制作food需要食材的编号
+        if (destraw == 0)break;//如果遇到0，说明后面没有需要的食材了。
 
+        Point foodpos(rawfood[destraw][1], rawfood[destraw][2]);//查看食材所在位置
+        gotodest(foodpos);
+        int movex = foodpos.x - PlayerInfo.position.x;
+        int movey = foodpos.y - PlayerInfo.position.y;
+        char fooddir = dir[movey + 1][movex + 1];//计算最后的朝向
+        if (fooddir == 's')//如果就在自己脚下
+        {
+            //明天再写awsl
+        }
+        else
+        {
+            move_dir(fooddir,1);
+
+        }
+    }
+    
+
+
+}
 
 
 void play()
@@ -564,7 +686,7 @@ void play()
     gotodest(Point(15, 29));
     cout << "sightrange:" << PlayerInfo.sightRange << endl;
     gotodest(findnearfood());
-    move_dir('w');//统一设置为，向上是食物产生点，这一步调整朝向。
+    move_dir('w',1);//统一设置为，向上是食物产生点，这一步调整朝向。
     while (1)
     {
         pick_dish_in_block(findnearfood());
