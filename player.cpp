@@ -302,51 +302,14 @@ void move_dir(char c) //按照c中表示的方向移动
     }
 
 }
-int  howtodolist[21][4] =//菜肴编号-20=行号
-{
-    {1,0,0,0},//0-20:面粉
-    {20,0,0,0},//1-21：面条
-    {4,20,0,0},
-    {2,0,0,0},
-    {3,0,0,0},
-    {5,0,0,0},
-    {3,4,0,0},
-    {20,26,0,0},
-    {11,20,0,0},
-    {12,18,23,0},
-    {13,14,23,0},
-    {12,15,0,0},
-    {14,24,0,0},
-    {8,9,0,0},
-    {22,11,15,0},
-    {10,25,0,0},
-    {13,24,0,0},
-    {16,4,0,0},
-    {4,20,25,10},
-    {9,0,0,0},
-    {6,7,3,10}
-};
-int* get_candolist(int **rawfood)//size=0~26,rawfood[0]=1，rawfood为int[51][3],有无，x,y
-{
-    int candolist[51]; //20-25为中间产物，26番茄炒蛋，27-40为成品菜，41-47为香锅，50位黑暗料理。
-    for (int i = 0; i <= 50; i++)
-    {
-        candolist[i] = 0;
-    }
-    ///中间产物
-    for (int i = 20; i <= 50; i++)
-    {
-        int i1 = i - 20;//菜肴编号-20用于检索howtodolist的行,rawfood[0]=1
-        candolist[i] = rawfood[howtodolist[i1][0]][0] && rawfood[howtodolist[i1][1]][0] &&
-            rawfood[howtodolist[i1][2]][0] && rawfood[howtodolist[i1][3]][0];
-    }
-    return candolist;
-}
 
 double calcdis(Point &point, Point &end) {
     //用简单的欧几里得距离计算H，这个H的计算是关键，还有很多算法，没深入研究^_^	
     return sqrt((double)(end.x - point.x) * (double)(end.x - point.x) + (double)(end.y - point.y) * (double)(end.y - point.y));
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
 Point findnearfood()//找最近的食物生成点
 {
     Point Point1(25, 4), Point2(42, 39), Point3(7, 40);//三个食物生成点下方一格，这样统一再往上走一步就好
@@ -371,13 +334,13 @@ Point findsecondfood()//找第二近的食物生成点
     if ((dis3 <= dis1) != (dis3 < dis2)) return Point3;
 }
 
-char dir_4[5] = { 0,'a','w','x','d' };//用这个数组存一下最后一步的方向
-int angle_4[5] = {0, 180,90,-90,0 };//用这个数组存一下最后扔的方向
-int cooklabel[5][5] = { {}, {8,25,1,3,0}, {25,37,2,2,0}, {40,28,3,4,0}, {33,17,4,2,0} };
+char dir_4[5] = { 0,'a','w','d','x' };//用这个数组存一下最后一步的方向
+int angle_4[5] = {0, 180,90,0,-90 };//用这个数组存一下最后扔的方向
+int cooklabel[5][5] = { {}, {8,25,1,4,0}, {25,37,2,2,0}, {40,28,3,3,0}, {33,17,4,2,0} };
 //第一行都是空着备用。
-
 //【灶台边空地坐标xy,灶台编号，最后一步的方向,label(检查的时候方便吧大概)】
 int label;//记录“据点”是第几个灶台
+
 
 int findnearcook()//找最近的灶台
 {
@@ -392,6 +355,7 @@ int findnearcook()//找最近的灶台
     if (dis3 <= dis1 && dis3 <= dis2 && dis3 <= dis4) return 3;
     if (dis4 <= dis1 && dis4 <= dis2 && dis4 <= dis3) return 4;
 }
+
 //从字符获得下一步的x和y怎么变化
 int nextx(char c)
 {
@@ -416,6 +380,7 @@ void gotodest(Point &dest)
     cout << "speed" << PlayerInfo.moveSpeed << endl;
     if (astar.maze[dest.x][dest.y] == 1)//首先检测目标是否是障碍物，如果是，搜索周围四格中不是障碍物的点作为目标。
     {
+        cout << "change dest" << endl;
         if (astar.maze[dest.x + 1][dest.y] == 0) {
             x = dest.x + 1;
             y = dest.y;
@@ -450,7 +415,10 @@ void gotodest(Point &dest)
             move_dir(lp);//处理完刚刚的问题再移动
             if (PlayerInfo.position.x == pos_prex && PlayerInfo.position.y == pos_prey) {
                 cout << "error!" << PlayerInfo.position.x << "," << PlayerInfo.position.y << endl;
-                move_dir(dir_4[rand() % 4]);
+                int rand1 = rand() % 4+1;
+                int rand2 = rand() % 1;
+                move_dir(dir_4[rand1]);
+                move_dir(dir_4[(rand1+rand2)%4+1]);
                 break;
             }//如果移动失败了，随机向某个方向移动一格，无论是否成功，都break循环，重新生成Getpath
             //cout << THUAI3::getGameTime() << endl;
@@ -487,19 +455,24 @@ int throw_darkdish(int _label)//检查灶台上有无黑暗料理，如果有，
             {
                 if (PlayerInfo.dish == DarkDish)//如果拿到了黑暗料理，扔出去
                 {
-                    put(2, 0, TRUE);//先往右扔两格
+                    put(2, 0, TRUE);//先往右扔两格,我下次看看最多能扔多远……
+                    return 2;//用这个灶台做菜，不要慌
+                }
+                else //不是黑暗料理！捡到宝了！
+                {
+                    return 3;//准备提交食物，耶
                 }
             }
         }
-
     }
-
-
 }
 int** get_all_dish(int x, int y)//检查包括指定点（灶台）在内周围八格有无
 //返回一个0-51的数组，每个数字指示mapcell中是否有该食材，第0位为1时,说明什么都没有。
 {
     int raw[51][3];//每一行是 {有无食材 有1 无0，食材坐标x,食材坐标y}，如果有不止一个食材，直接覆盖，无所谓。
+    //第一行raw[0][0]=1,方便后面运算
+    //如果食材在自己手上，坐标记0，0，如果在队友手里，记50，50
+    raw[0][0] = 1;
     list<Obj> l = MapInfo::get_mapcell(x, y);
     for (list<Obj>::iterator i = l.begin(); i != l.end(); i++)
     {
@@ -508,29 +481,100 @@ int** get_all_dish(int x, int y)//检查包括指定点（灶台）在内周围�
         //////////////////////////////////////////////////////////
     }
 }
-int get_one_dish(int x, int y)//从食物生成点捡起食物
+int get_one_dish(int x, int y)//看看食物生成点有没有食物
 {
     list<Obj> l = MapInfo::get_mapcell(x, y);
     for (list<Obj>::iterator i = l.begin(); i != l.end(); i++)
     {
         cout << "dish:" << i->dish << endl;
-        return i->dish;
+        if (i->blockType == Block) return i->dish;
     }
 }
-void play()
-{
-    //goto food
-    cout << "sightrange:" << PlayerInfo.sightRange << endl;
-    gotodest(findnearfood());
-    cout << "dish in hand :" << PlayerInfo.dish << endl;
-    move_dir('w');//统一设置为，向上是食物产生点，这一步调整朝向。
+
+int pick_dish_in_block(Point &food) {//Point 是食物生成点下方一格
+    if ( ((int)PlayerInfo.position.x) != food.x || ((int)PlayerInfo.position.y) != food.y) {
+        gotodest(Point(food.x, food.y));
+        move_dir('w');
+    }
     int dish = get_one_dish((int)PlayerInfo.position.x, (int)PlayerInfo.position.y + 1);
-    while(dish==0)//如果dish=0说明没有食物,就一直等着
+    while (dish == 0)//如果dish=0说明没有食物,就一直等着
     {
         this_thread::sleep_for(time_50ms);
         dish = get_one_dish((int)PlayerInfo.position.x, (int)PlayerInfo.position.y + 1);
+        cout << "wait for dish" << endl;
     }
+
     pick(FALSE, Block, 0);//是block的时候第三个随便输入,表示捡起block里的食材。
+    cout << "pick finish" << endl;
+    move_dir(dir_4[rand() % 4 +1]);//随机走一下，防止卡住
+    return PlayerInfo.dish;
+}
+
+int  howtodolist[21][4] =//菜肴编号-20=行号
+{
+    {1,0,0,0},//0-20:面粉
+    {20,0,0,0},//1-21：面条
+    {4,20,0,0},
+    {2,0,0,0},
+    {3,0,0,0},
+    {5,0,0,0},
+    {3,4,0,0},
+    {20,26,0,0},
+    {11,20,0,0},
+    {12,18,23,0},
+    {13,14,23,0},
+    {12,15,0,0},
+    {14,24,0,0},
+    {8,9,0,0},
+    {22,11,15,0},
+    {10,25,0,0},
+    {13,24,0,0},
+    {16,4,0,0},
+    {4,20,25,10},
+    {9,0,0,0},
+    {6,7,3,10}
+};
+
+int* get_candolist(int** rawfood)//size=0~26,rawfood[0]=1，rawfood为int[51][3],有无，x,y
+{
+    int candolist[51]; //20-25为中间产物，26番茄炒蛋，27-40为成品菜，41-47为香锅，50位黑暗料理。
+    for (int i = 0; i <= 50; i++)
+    {
+        candolist[i] = 0;
+    }
+    ///中间产物
+    for (int i = 20; i <= 50; i++)
+    {
+        int i1 = i - 20;//菜肴编号-20用于检索howtodolist的行,rawfood[0][0]=1
+        candolist[i] = rawfood[howtodolist[i1][0]][0] && rawfood[howtodolist[i1][1]][0] &&
+            rawfood[howtodolist[i1][2]][0] && rawfood[howtodolist[i1][3]][0];
+    }
+    return candolist;
+}
+
+int makefood(int* candolist,int** rawfood) {
+    return 0;
+}
+
+
+
+void play()
+{
+    //goto food
+    gotodest(Point(15, 29));
+    cout << "sightrange:" << PlayerInfo.sightRange << endl;
+    gotodest(findnearfood());
+    move_dir('w');//统一设置为，向上是食物产生点，这一步调整朝向。
+    while (1)
+    {
+        pick_dish_in_block(findnearfood());
+        if (PlayerInfo.dish != 0)
+        {
+            cout << "finish" << endl;
+            break;//真的捡到了吗？捡到了就break，否则继续守株待兔
+        }
+        cout << "wait" << endl;
+    }
     this_thread::sleep_for(time_50ms);
     cout <<"dish in hand : "<<PlayerInfo.dish<<endl;
     //准备找最近的灶台
@@ -552,8 +596,16 @@ void play()
     gotodest(findsecondfood());//找第二近的食材点
     cout << "dish in hand :" << PlayerInfo.dish << endl;
     move_dir('w');//统一设置为，向上是食物产生点，这一步调整朝向。
-    dish = get_one_dish((int)PlayerInfo.position.x, (int)PlayerInfo.position.y + 1);
-    pick(FALSE, Block, 0);//是block的时候第三个随便输入,表示捡起block里的食材。
+    while (1)
+    {
+        pick_dish_in_block(findnearfood());
+        if (PlayerInfo.dish != 0)
+        {
+            cout << "finish" << endl;
+            break;//真的捡到了吗？捡到了就break，否则继续守株待兔
+        }
+        cout << "wait" << endl;
+    }
     this_thread::sleep_for(time_50ms);
     cout << "dish in hand : " << PlayerInfo.dish << endl;
 
