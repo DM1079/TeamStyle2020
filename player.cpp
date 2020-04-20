@@ -849,6 +849,7 @@ void play()
     {
         int angle, dish_make;
         cout << "label when start:" << label << endl;
+        //加点随机性
         gotodest(findnearfood());
         move_dir('w', 1);//统一设置为，向上是食物产生点，这一步调整朝向。
         while (1)//守株待兔
@@ -1034,5 +1035,33 @@ void play()
         }
         state = 0;
     }
+    /*
+        gotodest(findsecondfood());//找第二近的食材点
+        cout << "**dish in hand :" << PlayerInfo.dish << endl;
+        move_dir('w');//统一设置为，向上是食物产生点，这一步调整朝向。
+        while (1)
+        {
+            pick_dish_in_block(findnearfood());
+            if (PlayerInfo.dish != 0)
+            {
+                cout << "finish" << endl;
+                break;//真的捡到了吗？捡到了就break，否则继续守株待兔
+            }
+            cout << "wait" << endl;
+        }
+        this_thread::sleep_for(time_50ms);
+        cout << "**dish in hand : " << PlayerInfo.dish << endl;
+
+        labelofcook = findnearcook();//先找最近的灶台
+        if (label != 0) { labelofcook = label; }//如果设置了据点，去据点，否则去最近的灶台。
+        gotodest(Point(cooklabel[labelofcook][0], cooklabel[labelofcook][1])); //{x,y,编号，朝向，label}
+        angle = angle_4[cooklabel[labelofcook][3]];
+        cout << "cooklabel="<<labelofcook<<",angle=" << angle << endl;
+        put(1, angle_4[cooklabel[labelofcook][3]], TRUE);
+        label = labelofcook;
+        cout << "label before finish:" << label << endl;
+        this_thread::sleep_for(time_50ms);
+        cout << "**dish in hand :" << PlayerInfo.dish << endl<<endl;
+        */
 
 }
