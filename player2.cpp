@@ -18,9 +18,10 @@ const int kCost2 = 9999; //斜移一格消耗
 const char dir[3][3] = { {'z','x','c' },{'a','s','d'},{'q','w','e'} };
 
 int cooking[6] = { 0,0,0,0,0,0 };//{0dish,1灶台label,2用时，3起，4止，5保护}
-int state = 0;
+int state = 3;//初始state=3
 int label;//记录“据点”是第几个灶台
-
+int getspeak();
+chrono::milliseconds time_2000ms(2000);
 chrono::milliseconds time_200ms(200);
 chrono::milliseconds time_50ms(50);
 chrono::milliseconds time_25ms(25);
@@ -525,6 +526,11 @@ int gotodest(Point& dest, int istimelimited = 0)//默认不限制，如果限制
                     //if (i->objType == 4) cout << "trigger" << i->trigger << endl;
                 }
             }
+
+            //******负人物需要随时获得信息*******
+            getspeak();
+            //*******************************
+
             move_dir(lp);//处理完刚刚的问题再移动
             //cout << "form" << PlayerInfo.position.x << "  " << PlayerInfo.position.y << "  move:" << lp << endl;
             if (PlayerInfo.position.x == pos_prex && PlayerInfo.position.y == pos_prey) {
@@ -595,6 +601,7 @@ void smallmove(double x, double y)//仅用于微小的移动，通过50ms=0.25�
             count--;
         }
     }
+
 }
 
 //走到灶台后第一件事检查黑暗料理
@@ -651,6 +658,13 @@ int throw_darkdish(int _label)//检查灶台上有无黑暗料理，如果有，
     }
     return 2;//灶台里啥都没有，直接做菜。
 }
+//player2 用于捣乱
+
+//走到别人的灶台，先看有没有成品料理，有就尝试拾取，然后准备提交，返回1
+//如果没有成品料理，看看灶台里面是不是空的，是空的把周围的食材全丢进去烧了，返回2.
+//如果以上两者都不是，返回0、
+
+
 
 int findallcook(int labelofcook)//从label开始转一圈圈,int=1表示找到了可以用的灶台，int=2表示拿到菜了。
 {
@@ -764,8 +778,6 @@ void get_all_dish(int _label)//为了方便，改成灶台周围八格+自身周
         }
     }
     rawfood[0][0] = 1;//第一行raw[0][0]=1,方便后面运算
-    int x = cooklabel[_label][0] + nextx(dir_4[cooklabel[_label][3]]);
-    int y = cooklabel[_label][1] + nexty(dir_4[cooklabel[_label][3]]);
     get_surround();
     for (int i = 0; i <= 24; i++)
     {
@@ -790,33 +802,54 @@ void get_all_dish(int _label)//为了方便，改成灶台周围八格+自身周
 }
 int get_one_dish(int x, int y)//看看食物生成点有没有食物
 {
-    list<Obj> l = MapInfo::get_mapcell(x, y);
+    list<Obj> l = MapInfo::get_mapcell(x, y);//先扫一遍食物生成点，看看有没有食物，如果有返回0
     for (list<Obj>::iterator i = l.begin(); i != l.end(); i++)
     {
-        if (i->objType == Block)
+        if (i->objType == Block && i->dish != 0)
         {
             cout << "dish:" << i->dish << endl;
-            return i->dish;
+            return 0;//
         }
     }
+    l = MapInfo::get_mapcell((int)PlayerInfo.position.x, (int)PlayerInfo.position.y);
+    for (list<Obj>::iterator i = l.begin(); i != l.end(); i++)
+    {
+        if (i->objType == Dish && i->dish != 0)
+        {
+            cout << "dish:" << i->dish << endl;
+            return i->dish;//再扫一遍脚下，如果有返回dish
+        }
+    }
+    return -1;//如果啥都没有，返回-1
 }
 
 int pick_dish_in_block(Point& food) {//Point 是食物生成点下方一格
     if (((int)PlayerInfo.position.x) != food.x || ((int)PlayerInfo.position.y) != food.y) {
         gotodest(Point(food.x, food.y));
-        move_dir('w');
+        move_dir('w',1);
     }
     int dish = get_one_dish((int)PlayerInfo.position.x, (int)PlayerInfo.position.y + 1);
-    while (dish == 0)//如果dish=0说明没有食物,就一直等着
+    while (dish == -1)//如果dish=-1说明没有食物,就一直等着
     {
         this_thread::sleep_for(time_50ms);
         dish = get_one_dish((int)PlayerInfo.position.x, (int)PlayerInfo.position.y + 1);
         cout << "wait for dish" << endl;
     }
+    if (dish == 0)
+    {
+        pick(FALSE, Block, 0);//是block的时候第三个随便输入,表示捡起block里的食材
+        this_thread::sleep_for(time_50ms);
+        cout << "pick dish in block finish" << endl;
+        move_dir(dir_4[rand() % 4 + 1]);//随机走一下，防止卡住
 
-    pick(FALSE, Block, 0);//是block的时候第三个随便输入,表示捡起block里的食材。
-    cout << "pick finish" << endl;
-    move_dir(dir_4[rand() % 4 + 1]);//随机走一下，防止卡住
+    }
+    else
+    {
+        pick(TRUE, Dish, dish);//捡起脚下的食材
+        this_thread::sleep_for(time_50ms);
+        cout << "pick dish on the ground finish" << endl;
+        move_dir(dir_4[rand() % 4 + 1]);//随机走一下，防止卡住
+    }
     return PlayerInfo.dish;
 }
 const int  howtodolist[21][4] =//菜肴编号-20=行号
@@ -999,6 +1032,51 @@ int getcondiment(int isthrow)
     return 1;
 }
 
+void trick(int _label)//_label是被捣乱的编号,把这个灶台周围所有食材都丢进去一锅端了。
+{
+    int cookx = cooklabel[_label][0] + nextx(dir_4[cooklabel[_label][3]]);
+    int cooky = cooklabel[_label][1] + nexty(dir_4[cooklabel[_label][3]]);
+    char c = dir_4[cooklabel[_label][3]];//朝向
+    cout << "trick label :" << _label << endl;
+    for (int i = 1; i <= 25; i++)
+    {
+        if (rawfood[i][0] != 0)
+        {
+            Point foodpos(rawfood[i][1], rawfood[i][2]);//查看食材所在位置
+            if (rawfood[i][1] != cookx || rawfood[i][1] != cooky)//不在灶台里再去捡起来
+            {
+                gotodest(foodpos);
+                int movex = sgn((int)foodpos.x - (int)PlayerInfo.position.x);
+                int movey = sgn((int)foodpos.y - (int)PlayerInfo.position.y);
+                char fooddir = dir[movey + 1][movex + 1];//计算最后的朝向
+                if (fooddir == 's')//如果就在自己脚下
+                {
+                    pick(TRUE, Dish, i);
+                    this_thread::sleep_for(time_50ms);
+                    put_dest(Point(cookx, cooky), TRUE);//这里+0.5没用，因为point是整数。
+
+                }
+                else
+                {
+                    move_dir(fooddir, 1);//调整朝向
+                    cout << "move : " << fooddir << endl;
+                    pick(FALSE, Dish, i);
+                    this_thread::sleep_for(time_50ms);
+                    put_dest(Point(cookx, cooky), TRUE);
+                }
+                cout << "picked :" << i << endl;
+            }
+            gotodest(Point(cooklabel[label][0], cooklabel[label][1]));//再回到灶台跟前
+            smallmove(cooklabel[label][0], cooklabel[label][1]);
+            move_dir(c, 1);//调整朝向
+            use(0, 0, 0);//开始做菜
+            this_thread::sleep_for(time_50ms);
+            smallmove(cooklabel[label][0], cooklabel[label][1]);
+            move_dir(c, 1);//调整朝向
+            use(0, 0, 0);//多试一次呗
+        }
+    }
+}
 
 int makefood(int food)//传入目标的编号
 {
@@ -1171,59 +1249,201 @@ int commitTask() {
         return 0;//返回0说明存起来了
     }
 }
-vector<DishType> finishedDish;  //这里放已经完成的菜品清单
-int commitTask2() {
-    for (auto i : task_list) {
-        auto findResult = find(finishedDish.begin(), finishedDish.end(), i);
-        if (findResult != finishedDish.end())  //任务所需物品是之前储存过的
-        {
-            //TODO
-            //这里写到指定地点存放手中的菜品
-            finishedDish.push_back(PlayerInfo.dish);
-            //TODO
-            //这里写去储存位置，捡起来新的菜品
-            gotodest(Point(26, 24));
-            move_dir('a');
-            while (PlayerInfo.dish != 0) {
-                list<DishType> tk = task_list;
-                for (auto i = tk.end(); i != tk.begin(); i--) {
-                    if (PlayerInfo.dish == *i) {
-                        use(0, 0, 0);
-                        for (auto it = finishedDish.begin(); it != finishedDish.end(); it++)
-                            if (*it == PlayerInfo.dish)
-                                finishedDish.erase(it);
-                        this_thread::sleep_for(time_50ms);
-                    }
-                }
-            }
-            return 1;
-        }
-
+class Dishpos
+    
+{
+public:
+    Dishpos(int dish=0,int x=0,int y=0)
+    {
+        Dish = dish;
+        dishx = x;
+        dishy = y;
     }
-}
+    int Dish;
+    int dishx;
+    int dishy;
+};
+list<Dishpos> finishedDish;  //这里放已经完成的菜品清单
+
+
 int getspeak()
 {
     char c;
+    static string olds;
     int l, dish,x, y;
     string re=PlayerInfo.recieveText;
-    cout << re << endl;
+    //cout << re << endl;
+    if (olds.size() >= 1 && re == olds)
+    {
+        //cout << "no change" << endl;
+        return 0;//没有改变
+    }
+    olds = re;
     stringstream restream;
     restream << re.c_str();
     restream >> c;
     switch (c)
     {
     case 'l':
-        restream >> c>>l;
-        cout << "label change to" << l << endl;
+        restream >>l;
+        cout << "label change to:" << l << endl;
+        label = l;
         break;
+        return 1;//label changed
     case 'd':
-        restream >> c >>dish>> x >> y;
-        cout << "dish to submit" << dish << "in :" << x << "," << y << endl;
+        restream >>dish>> x >> y;
+        cout << "dish to submit:" << dish << "in :" << x << "," << y << endl;
+        finishedDish.push_back(Dishpos(dish,x,y));
+        return 2;//dish added
+        break;
+    case 's':
+        cout << "stop 21s!" << endl;
+        this_thread::sleep_for(time_2000ms);
+        return 3;//stop
         break;
     }
 
 }
-int first = 1;
+int gotosubmit(Dishpos& i);
+int can_submit()//判断任务列表里有没有可以去提交的,return 2没捡到菜，return1成功提交，return-1放回原处,return 0没有可以提交的任务。
+{
+    list<DishType> tk = task_list;
+    for (auto i = finishedDish.begin(); i != finishedDish.end(); i++) {//根据成品菜列表，看看任务列表里有没有相同的
+        if (find(tk.begin(), tk.end(), i->Dish) != tk.end())//如果有，就跑过去检菜交菜
+        {
+            finishedDish.erase(i);//删掉这个信息
+            int ret=gotosubmit(Dishpos(i->Dish, i->dishx, i->dishy));
+            return ret;
+        }
+    }
+    //如果刚刚没有return,那就是列表里没有了
+    return 0;
+}
+
+int gotosubmit(Dishpos &i)
+{
+    int randpoint = rand() % 2;
+    Point destsubmit(26, 24 + randpoint);//随机去两个点之一交任务
+    Point psave(i.dishx, i.dishy);//存放点
+    gotodest(psave);
+    this_thread::sleep_for(time_50ms);
+    pick(TRUE, Dish, i.Dish);
+    this_thread::sleep_for(time_50ms);
+    cout << "try to pick dish" << i.Dish << endl;
+    if (PlayerInfo.dish == 0)
+    {
+        pick(TRUE, Dish, i.Dish);
+        this_thread::sleep_for(time_50ms);
+    }
+    if (PlayerInfo.dish == 0)
+    {
+        cout << "pick failed" << endl;
+        return 2;//捡起来失败了，继续游荡吧
+    }
+    if (PlayerInfo.tool != Condiment) {//如果手上没有调料，捡起来试试
+        get_all_dish(0);//这个参数没用了，主要看有没有Condiment
+
+        if (rawfood[51][1] != 0)
+        {
+            cout << "pick condiment" << endl;
+            gotodest(Point(rawfood[51][1], rawfood[51][2]));
+            pick(TRUE, Tool, Condiment);
+        }
+    }
+
+    //捡起来了，去提交任务吧
+    gotodest(destsubmit);
+    move_dir('a', 1);
+    while (PlayerInfo.dish != 0 && find(task_list.begin(), task_list.end(), PlayerInfo.dish) != task_list.end())
+    {
+        if (PlayerInfo.tool == Condiment)
+        {
+            use(1, 0, 0);//用调料提交
+            this_thread::sleep_for(time_50ms);
+            gotodest(destsubmit);
+            move_dir('a', 1);
+            use(0, 0, 0);
+            this_thread::sleep_for(time_50ms);
+        }
+        else
+        {
+            cout << "dish in hand" << endl;
+            use(0, 0, 0);
+            this_thread::sleep_for(time_50ms);
+            gotodest(destsubmit);
+            move_dir('a', 1);
+            use(0, 0, 0);
+            this_thread::sleep_for(time_50ms);
+            cout << "try to submit!" << endl;
+            cout << "score now" << endl;
+        }
+    }
+    if (PlayerInfo.dish != 0)//手上还有菜，说明任务超时了，把菜放回原来的地方
+    {
+        cout << "submit failed!" << endl;
+        gotodest(psave);
+        put(0, 0, TRUE);
+        finishedDish.push_back(Dishpos(PlayerInfo.dish, psave.x, psave.y));
+        return -1;
+    }
+
+}
+int first = 1;//只在第一轮的时候跑到食物生成点般一个食物。
+int throw_darkdish2(int _label)//检查灶台上有无黑暗料理，如果有，尝试拾取，拾取成功就扔掉，拾取失败就标记这个灶台不行，找下一个灶台
+{
+    int rand1 = rand() % 4 + 1;//1,2,3,4
+    int rand2 = rand() % 2 - 1;//-1,0,1  0~5
+    int add12 = rand1 + rand2;
+    if (add12 == 0)add12 = 4;
+    if (add12 == 5) add12 = 1;
+    if (cooklabel[_label][4] == 1)return 0;//这个灶台是自己正在做的，不要扔黑暗料理
+    //有时候自己做了菜，但是没有拿到手，这时候会把label变成0，但是这还是我的菜啊
+    int x = cooklabel[_label][0] + nextx(dir_4[cooklabel[_label][3]]);
+    int y = cooklabel[_label][1] + nexty(dir_4[cooklabel[_label][3]]);
+    char c = dir_4[cooklabel[_label][3]];
+    list<Obj> l = MapInfo::get_mapcell(x, y);
+    for (list<Obj>::iterator i = l.begin(); i != l.end(); i++)
+    {
+        if (i->blockType == 3 && i->dish != 0 && i->dish < 49)//如果发现灶台里面有菜,而且不是overcook或者黑暗料理
+        {
+            cout << "dish in cook!" << endl;
+            put(1, PI, TRUE);//先把手里的东西放脚下
+            move_dir(c);//确保朝向
+            pick(FALSE, Block, 0);//尝试拾取
+            this_thread::sleep_for(time_50ms);
+            cout << "DISH IN BLOCK  " << i->dish << "  _label  " << _label << " label " << label << "  is my cook  " << cooklabel[label][4] << endl;
+            if (PlayerInfo.dish == 0)//说明没有拿到dish,也就是这个灶台正在烹饪
+            {
+                //随便走两步，再拿一下试试
+                cout << "random move" << dir_4[rand1] << dir_4[add12] << endl;;
+                move_dir(dir_4[rand1]);
+                move_dir(dir_4[add12]);
+                gotodest(Point(cooklabel[_label][0], cooklabel[_label][1]));
+                smallmove(cooklabel[_label][0] + 0.5, cooklabel[_label][1] + 0.5);
+                move_dir(c);//确保朝向
+                pick(FALSE, Block, 0);//尝试拾取
+                if (PlayerInfo.dish == 0) {
+                    return 0;//啥都不是，不管了
+                }
+            }
+            if (PlayerInfo.dish >= 49)//如果拿到了黑暗料理，扔出去
+            {
+                cout << "throw dark dish  " << PlayerInfo.dish << endl;
+                put(2, 0, TRUE);//先往右扔两格,我下次看看最多能扔多远……
+                return 0;//用这个灶台做菜，不要慌
+            }
+            else //不是黑暗料理！捡到宝了！
+            {
+                return 1;//准备提交食物，耶
+            }
+        }
+
+    }
+    //灶台里啥都没有，直接做菜，把周围菜扔进去点火
+    get_all_dish(_label);
+    trick(_label);
+    return 2;
+}
 
 
 void play()
@@ -1234,11 +1454,109 @@ void play()
     //通信规范 字母 数值
     //'l' 数字            label的改变
     //'d' dish 坐标 坐标   存放dish
-   /* if (first == 1) {
+
+    //那最开始延时25ms是不是就能错开了……
+    //只在第一次的时候跑到最远的食物生成点般一个食物，等label更新之后送过去。
+    
+    if (first == 1) {
         first = 0;
+        this_thread::sleep_for(time_200ms);
         this_thread::sleep_for(time_25ms);
         gotodest(findfarfood());
-    }*/
+        move_dir('w', 1);//统一设置为，向上是食物产生点，这一步调整朝向。
+        while (1)//守株待兔
+        {
+            pick_dish_in_block(findnearfood());
+            if (PlayerInfo.dish != 0)
+            {
+                cout << "finish" << endl;
+                break;//真的捡到了吗？捡到了就break，否则继续守株待兔
+            }
+            cout << "wait" << endl;
+            getspeak();//等的时候随时修改
+        }
+        while (label == 0)
+        {
+            getspeak();
+            cout << "wait for label:" << label << endl;
+            //wait for label
+        }
+        gotodest(Point(cooklabel[label][0], cooklabel[label][1])); //{x,y,编号，朝向，lab
+        int randput = rand() % 4 + 1;
+        //随机放在周围四格，防止被一锅端
+        //put(1, angle_4[cooklabel[labelofcook][3]], TRUE);这是原来的定点投放。
+        cout << "random put:" << randput;
+        put(1, angle_4[randput], TRUE);
+        if (PlayerInfo.tool == Condiment)
+        {
+            this_thread::sleep_for(time_50ms);
+            put(0, 0, FALSE);//调料扔到脚下
+        }
+        state = 3;//state好像没什么用 先保留吧
+        this_thread::sleep_for(time_200ms);
+        if (PlayerInfo.dish != 0)
+        {
+            put(0, 0, TRUE);
+        }
+    }
+
+
+    int randl = rand() % 2;
+    int randlabel = label;//随机去某个灶台捣乱。
+    if (randl == 0)
+    {
+        randlabel--;
+    }
+    else
+    {
+        randlabel++;
+    }
+    int c = can_submit();// return1成功提交，return - 1放回原处,return 2没捡到菜， return 0没有可以提交的任务。
+    int randput = rand() % 4 + 1;
+    switch (c)
+    {
+    case 1:
+    case 0:
+        gotodest(findfarfood());
+        move_dir('w', 1);//统一设置为，向上是食物产生点，这一步调整朝向。
+        while (1)//守株待兔
+        {
+            pick_dish_in_block(findnearfood());
+            if (PlayerInfo.dish != 0)
+            {
+                cout << "finish" << endl;
+                break;//真的捡到了吗？捡到了就break，否则继续守株待兔
+            }
+            cout << "wait" << endl;
+            getspeak();//等的时候随时修改
+        }
+        gotodest(Point(cooklabel[label][0], cooklabel[label][1])); //{x,y,编号，朝向，lab
+
+        //随机放在周围四格，防止被一锅端
+        //put(1, angle_4[cooklabel[labelofcook][3]], TRUE);这是原来的定点投放。
+        cout << "random put:" << randput;
+        put(1, angle_4[randput], TRUE);
+        if (PlayerInfo.tool == Condiment)
+        {
+            this_thread::sleep_for(time_50ms);
+            put(0, 0, FALSE);//调料扔到脚下
+        }
+        state = 3;//state好像没什么用 先保留吧
+        this_thread::sleep_for(time_200ms);
+        if (PlayerInfo.dish != 0)
+        {
+            put(0, 0, TRUE);
+        }
+
+        break;
+    case 2:
+    case -1:
+        gotodest(Point(cooklabel[randlabel][0], cooklabel[randlabel][1])); //{x,y,编号，朝向，lab
+        move_dir(dir_4[cooklabel[randlabel][3]]);
+        use(0, 0, 0);
+        this_thread::sleep_for(time_200ms);
+    }
     getspeak();
     this_thread::sleep_for(time_200ms);
+    
 }
