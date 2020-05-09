@@ -18,6 +18,8 @@
 #include "OS_related.h"
 #include "player.h"
 
+//player 1
+
 #define PI acos(-1.0)
 
 using namespace THUAI3;
@@ -252,11 +254,51 @@ class Storage {
     cout << "size = " << count << endl;
     return count;
   }
+
+  int getSpiceSize() {
+      int count = 0;
+      for (int i = 5; i <= 8; i++) {
+          if (getCnt(DishType(i)) != 0)
+              count++;
+      }
+      cout << "spice size = " << count << endl;
+      return count;
+  }
+
 };
 
 Storage mystorage;
 Storage nullptrstorage;
 ////////////////////////////////////////////////////////////////
+int getCookedTime(DishType _goal) {
+    //返回0如果是最低级材料
+    if (_goal < 0 || _goal > SpicedPot6)
+        return 0;//非法输入
+    if (_goal >= SpicedPot && _goal <= SpicedPot6)
+        return Constant::DishInfo.at(SpicedPot).CookTime;
+    list<DishType> recipeList{ _goal };
+    int result = 0;
+    bool isStillLoop = true;
+    while (isStillLoop) {
+        isStillLoop = false;
+        for (auto i = recipeList.begin(); i != recipeList.end();) {
+            //递归查找是否已经有存货来合成i指向的物品
+            auto findResult = Constant::CookingTable.find(*i);  // i的合成表
+            if (findResult !=
+                Constant::CookingTable.end()) {  // i是可合成的，即，i不是最低级原料
+                isStillLoop = true;
+                result += Constant::DishInfo.at(*i).CookTime;
+                recipeList.erase(i);  //删除i并将i的合成表合并至recipelist
+                list<DishType> resultList2 = findResult->second;
+                recipeList.merge(resultList2);
+                break;//自动重置循环
+            }
+            else
+                i = recipeList.erase(i);//i是不可合成的,删去i
+        }
+    }
+    return result;
+}
 
 DishType getGoal(list<DishType> raws) {
   //返回可以制作的目标，如果不能找到，则返回DishEmpty
@@ -739,7 +781,7 @@ int gotodest(
       // trigger不检查了 就检查脚下有没有东西吧
       list<Obj> l = MapInfo::get_mapcell((int)pos_prex, (int)pos_prey);
       for (list<Obj>::iterator i = l.begin(); i != l.end(); i++) {
-        if (i->objType == Tool) {
+        if (i->objType == Tool && PlayerInfo.tool!=Condiment) {
           int t = i->tool;
           cout << "tool" << t << endl;
           switch (t) {
@@ -777,6 +819,16 @@ int gotodest(
                 cout << "near cook not pick condiment!" << endl;
               }
               break;
+            case LandMine:
+            case TrapTool:
+            case FlashBomb:
+                pick(TRUE, Tool, t);
+                tSleep(50);
+                if (PlayerInfo.tool == t) {
+                    cout << "put trigger " << t << endl;
+                    use(1, 0, 0);
+                    tSleep(50);
+                }
             default:
               break;
           }
@@ -1093,15 +1145,20 @@ int pick_dish_in_block(Point food, int timelimit = 0) {  // Point 是食物生�
 
 int xiangguo;
 
-int whichfood() {
+int whichfood() 
+{
   int which = 0;
-  if (find(task_list.begin(), task_list.end(), SpicedPot) != task_list.end()) {
-    int sizeraw = mystorage.getStorageSize();
-    if (sizeraw >= 3 && mystorage.condimentList.empty() != TRUE) {
+  /*
+  if (find(task_list.begin(), task_list.end(), SpicedPot) != task_list.end()) 
+  {
+    int sizeraw = mystorage.getSpiceSize();
+    
+    if (sizeraw >= 3 && mystorage.condimentList.empty() != TRUE && getGameTime()<=510000)  {
       cout << "can make spice pot!" << endl;
       return SpicedPot;  //如果有调料，而且食材够，可以做香锅。
     }
   }
+  */
   cout << "which food to make?" << endl;
   if (mystorage.getRecipe(Flour).empty() == FALSE &&
       mystorage.getCnt(DishType(Flour)) == 0)
@@ -1279,23 +1336,27 @@ int makefood(int food)  //传入目标的编号 whichfood
 
   tSleep(50);
   mystorage.updatestorage();
-  if (food == SpicedPot)  //把调料和三-五种原料丢进去。
+  if (food == SpicedPot)  //把调料和三-四种原料丢进去。//
   {
     cout << "make spicepot!!" << endl;
-    int sizeraw = mystorage.getStorageSize();
-    if (sizeraw > 5)
-      sizeraw = 5;
+    int sizeraw = mystorage.getSpiceSize();
+    if (sizeraw > 4)
+      sizeraw = 4;
+    if (sizeraw <= 2)
+        return 0;
+    cout <<"size raw"<< sizeraw << endl;
     getcondiment(1);  //把调料扔到灶台上
     get_foodgen_dis();
     sort(foodgen.begin(), foodgen.end(), sort_by_3);  //根据距离从小到大排序
-    int k = 1;
+    int k = 5;
     for (int j = 1; j <= sizeraw && k <= 8;
          j++)  // j指示已经放入了多少个食材，k指示第几近的食材。
     {
       int destraw = foodgen[k][0];
       k++;
       if (mystorage.getCnt((DishType)destraw) == 0) {
-        j--;  // j不增加
+        j--;  //没有食材k，j不增加
+        cout << " no destraw :" << destraw << endl;
       } else {
         cout << "spice raw number :" << j << endl;
         dPoint i = *mystorage.getStoragePos((DishType)destraw).begin();
@@ -1342,7 +1403,9 @@ int makefood(int food)  //传入目标的编号 whichfood
     }
     if (iscondiment == 0)
       return 0;
-  } else {
+  } 
+  else //不做香锅
+  {
     list<StoragePerDish> st = mystorage.getRecipe(DishType(food));
     //先检索最大的step,然后把和最大的step相同的step都丢到灶台里
     int maxstep = 0;
@@ -1352,10 +1415,10 @@ int makefood(int food)  //传入目标的编号 whichfood
       if (i.stepsOfProcessed > maxstep)
         maxstep = i.stepsOfProcessed;
     }
-    if (maxstep == 1)
-      return 0;  //已经有成品菜了，不做这个。
+    if (maxstep == 1) return 0;  //已经有成品菜了，不做这个。
     cout << "start to pick food to cook" << endl;
-    for (auto i : st) {
+    for (auto i : st) 
+    {
       if (i.stepsOfProcessed == maxstep)  //如果步数等于最大步数，就丢到锅里
       {
         int destraw = i.type;
@@ -1420,6 +1483,19 @@ int makefood(int food)  //传入目标的编号 whichfood
 
   smallmove(cooklabel[label][0] + 0.5, cooklabel[label][1] + 0.5);
   move_dir(c, 1);  //调整朝向
+  list<Obj> l = MapInfo::get_mapcell(cookx, cooky);  //看看灶台里有啥
+  cout <<endl<< "************** map info of cook: ***************" << endl;
+  int dishnumber = 0;
+  for (list<Obj>::iterator i = l.begin(); i != l.end(); i++) {
+      cout << "TYPE:" << i->blockType << "   dish:" << i->dish << "   tool:" << i->tool << endl;
+      if (i->dish >= 5 && i->dish <= 8) dishnumber++;
+  }
+  if (food == SpicedPot && dishnumber <= 2)
+  {
+      cout << " <=2 dishnumber = " << dishnumber << endl;
+      return 0;
+  }
+  cout << "**************  end map info of cook: *************" << endl<<endl;
   use(0, 0, 0);    //开始做菜
   tSleep(50);
   smallmove(cooklabel[label][0], cooklabel[label][1]);
@@ -1427,7 +1503,7 @@ int makefood(int food)  //传入目标的编号 whichfood
   use(0, 0, 0);    //多试一次呗
   cout << "*****start to cook:" << food << endl;
   tSleep(50);
-  list<Obj> l = MapInfo::get_mapcell(cookx, cooky);  //看看灶台里有啥
+  l = MapInfo::get_mapcell(cookx, cooky);  //看看灶台里有啥
   for (list<Obj>::iterator i = l.begin(); i != l.end(); i++) {
     if (i->blockType == 3 && i->dish == DarkDish)
       return 1;  //在做了在做了
@@ -1470,16 +1546,17 @@ int commitTask() {
     move_dir('a', 1);
     while (PlayerInfo.dish != 0 && find(task_list.begin(), task_list.end(),
                                         PlayerInfo.dish) != task_list.end()) {
-        cout << " commit task ";
+        cout << " commit task : "<< PlayerInfo.dish;
       if (PlayerInfo.tool == Condiment) {
         use(1, 0, 0);  //用调料提交
         tSleep(50);
-        cout << "with condiment" << endl;
+        cout << "  with condiment" << endl;
       } else {
-          cout << "without condiment" << endl;
+          cout << "  without condiment" << endl;
         use(0, 0, 0);
         tSleep(50);
       }
+      move_dir(dir_4[rand()%4+1]);//随机走一步 防止卡住
       gotodest(destsubmit);
       Sleep(50);
       move_dir('a', 1);
@@ -1494,7 +1571,6 @@ int commitTask() {
                   << (int)save.y;
         cout << "send" << sdishinfo.str() << endl;
         speakToFriend(string(sdishinfo.str()));
-
         put(0, 0, TRUE);
         tSleep(50);
         if (PlayerInfo.tool == Condiment) {
@@ -1539,7 +1615,15 @@ void findbestdish() {
       sumdis += foodgen[dish][3];  //计算各个食物生产点的距离之和
     }
     auto findres = Constant::DishInfo.find(i);
-    double r_value = sumdis / (findres->second.Score);
+    double maketime = getCookedTime(DishType(i));
+    double r_value;
+    if (PlayerInfo.score >= 250) {
+        r_value = ((maketime + 5000) * sqrt(sumdis)) / (findres->second.Score);
+    }
+    else
+    {
+        r_value = sumdis / (findres->second.Score);
+    }
     // sort默认从小到大排序,最好是r_value最小，也就是距离/分数约小越好
     vector<double> thisdish = {double(i), r_value};  //编号，性价比
     bestdish.push_back(thisdish);
@@ -1552,18 +1636,18 @@ int findbestfoodgen(int timelimited = 0)  //传入cookedtime
   bestdish.clear();   // list<array<int,2>>
   get_foodgen_dis();  //更新距离各食物生产点的距离
   cout << "find best dish" << endl;
-  if (timelimited != 0 && timelimited <= 60000) 
+  if (timelimited != 0 && timelimited < 60000) 
   {
     cout << "return rand() with time limited" << endl;
     vector<int> destinfo;
     sort(foodgen.begin(), foodgen.end(), sort_by_3);  //根据距离从小到大排序
-    cout << "sort finish" << endl;
-    if (timelimited <= 30000)
-      destinfo = foodgen[rand() % 5];  //  前五个里面随机一个吧
+    cout << "sort finish 3" << endl;
+    destinfo = foodgen[rand() % 5];  //  前五个里面随机一个吧
     if (timelimited <= 15000)
       destinfo = foodgen[rand() % 3 +1];  //  前三个里面随机一个吧,去掉最近的一个，容易崩。。
     int mydish = destinfo[0];
     sort(foodgen.begin(), foodgen.end(), sort_by_0);
+    cout << "sort finish 0" << endl;
     cout << "foodgen my dish :" << mydish << endl;
     return mydish;
   } 
@@ -1572,16 +1656,32 @@ int findbestfoodgen(int timelimited = 0)  //传入cookedtime
     for (auto i : task_list)  //用任务列表计算性价比
     {
       cout << "calculate value from tklist:" << i << endl;
-      if (i != SpicedPot) {
+      if (i != SpicedPot && i>=1 && i<=DarkDish) 
+      {
         double sumdis = 0;
         list<DishType> ls = mystorage.getDeficient(DishType(i));
-        if (ls.empty() == FALSE) {
-          for (auto dish : ls) {
+        if (ls.empty() == FALSE) 
+        {
+          for (auto dish : ls) 
+          {
+              if (dish > 8)
+              {
+                  cout << ">8 dish=  "<< dish << endl;
+              }
             sumdis += foodgen[dish][3];  //计算各个食物生产点的距离之和
           }
+          cout << "sumdis = " << sumdis;
           auto findres = Constant::DishInfo.find(i);
-          double r_value = sumdis / (findres->second.Score);
-          cout << "sumdis = " << sumdis << "  r-value = " << r_value << endl;
+          double maketime = getCookedTime(DishType(i));
+          double r_value=9999;
+          if (PlayerInfo.score >= 250) {
+              r_value = ((maketime + 5000) * sqrt(sumdis)) / (findres->second.Score);
+          }
+          else
+          {
+              r_value = sumdis / (findres->second.Score);
+          }
+          cout<< "  r-value = " << r_value << endl;
           // sort默认从小到大排序,最好是r_value最小，也就是距离/分数约小越好
           vector<double> thisdish = {double(i), r_value};  //编号，性价比
           bestdish.push_back(thisdish);
@@ -1591,11 +1691,13 @@ int findbestfoodgen(int timelimited = 0)  //传入cookedtime
         }
       }
     }
+    cout << "calculate finish" << endl;
     if (bestdish.empty()) {
       cout << "all empty" << endl;
       return rand() % 8 + 1;
     }
     bestdish.sort(sort_by_1);
+    cout << "bestdish sort finish" << endl;
     int mybest = (*bestdish.begin())[0];  // dish的编号
     cout << "mybest - " << mybest << endl;
     list<DishType> st = mystorage.getDeficient(DishType(mybest));
@@ -1761,6 +1863,8 @@ void play() {
                     break;  //真的捡到了吗？捡到了就break，否则继续守株待兔
                 }
                 cout << "pick failed" << endl;
+                move_dir(dir_4[rand() % 4 + 1], 1);
+                gotodest(foodpos);
             }
             tSleep(50);
             cout << "dish in hand : " << PlayerInfo.dish << endl;
@@ -1774,6 +1878,7 @@ void play() {
             mainswitch(nextstate);
         }
         myround += 1;
+        cout << "score now" << PlayerInfo.score << endl;
         if (state == 0) {
             cout << endl << "************state 1 begin **********" << endl;
             int bestfoodgen = findbestfoodgen();
@@ -1793,6 +1898,8 @@ void play() {
                     break;  //真的捡到了吗？捡到了就break，否则继续守株待兔
                 }
                 cout << "pick failed" << endl;
+                move_dir(dir_4[rand() % 4 + 1], 1);
+                gotodest(foodpos);
             }
             tSleep(50);
             cout << "dish in hand : " << PlayerInfo.dish << endl;
@@ -1879,7 +1986,7 @@ void play() {
                     }
                 }
 
-                if (getGameTime() >= cooking[4]) {  // finished time
+                if (getGameTime() >= cooking[4]+50) {  // finished time
                     cout << "out of time" << endl;
                     wait = 0;
                     break;
