@@ -634,11 +634,20 @@ Point findsecondfood()  //找第二近的食物生成点
 
 char dir_4[5] = {0, 'a', 'w', 'd', 'x'};  //用这个数组存一下最后一步的方向
 double angle_4[5] = {0, PI, PI / 2, 0, -PI / 2};  //用这个数组存一下最后扔的方向
+
+//player2换一个表
+/*
 int cooklabel[5][5] = {{},
                        {8, 25, 1, 4, 0},
                        {25, 37, 2, 2, 0},
                        {40, 28, 3, 3, 0},
                        {33, 17, 4, 2, 0}};
+*/
+int cooklabel[5][5] = { {},
+                       {7, 24, 1, 3, 0},
+                       {24, 38, 2, 3, 0},
+                       {41, 27, 3, 2, 0},
+                       {33, 19, 4, 4, 0} };
 //第一行都是空着备用。
 //【灶台边空地坐标xy,灶台编号，最后一步的方向,label(检查的时候方便吧大概)，在做菜吗】
 
@@ -741,8 +750,7 @@ Point getnear(Point dest) {
 
 int gotodest(
     Point dest,
-    int istimelimited =
-        0)  //默认不限制，如果限制，把20000改成cooklabel[4]-5000,返回值为1表示成功
+    int istimelimited =0)  //默认不限制，如果限制，把20000改成cooklabel[4]-5000,返回值为1表示成功
 {
   list<char>::iterator lp;
   int x = dest.x;
@@ -1670,8 +1678,11 @@ int findbestfoodgen(int timelimited = 0)  //传入cookedtime
   } 
   else 
   {
-    for (auto i : task_list)  //用任务列表计算性价比
-    {
+      list<DishType> tklist = task_list;
+      cout << "size of tklist " << task_list.size() << endl;
+      for (list<DishType>::iterator l = tklist.begin(); l != tklist.end(); l++)  //用任务列表计算性价比
+      {
+          int i = *l;
       cout << "calculate value from tklist:" << i << endl;
       if (i != SpicedPot && i>=1 && i<=DarkDish) 
       {
@@ -1749,7 +1760,9 @@ void mainswitch(int nextstate) {
         labelofcook = label;
         //随机放在周围四格，防止被一锅端
         // put(1, angle_4[cooklabel[labelofcook][3]], TRUE);这是原来的定点投放。
-        cout << "random put:" << randput;
+        int randput = rand() % 4 + 1;
+        if (randput == 2 && label == 4) randput = 4;//这个是因为，4灶台网上扔会放在视野外
+        cout << "rand put " << randput << " in cooklabel : " << label << endl;
         put(1, angle_4[randput], TRUE);
         if (PlayerInfo.tool == Condiment) {
           tSleep(50);
@@ -1904,8 +1917,9 @@ int can_submit()//判断任务列表里有没有可以去提交的,return 2没�
     for (auto i = finishedDish.begin(); i != finishedDish.end(); i++) {//根据成品菜列表，看看任务列表里有没有相同的
         if (find(tk.begin(), tk.end(), i->Dish) != tk.end())//如果有，就跑过去检菜交菜
         {
+            Dishpos save(i->Dish, i->dishx, i->dishy);
             finishedDish.erase(i);//删掉这个信息
-            int ret = gotosubmit(Dishpos(i->Dish, i->dishx, i->dishy));
+            int ret = gotosubmit(save);
             return ret;
         }
     }
@@ -1922,7 +1936,7 @@ int gotosubmit(Dishpos i)//return1成功提交，return - 1放回原处,return 2
     tSleep(50);
     pick(TRUE, Dish, i.Dish);
     tSleep(50);
-    cout << "try to pick dish" << i.Dish << endl;
+    cout << "try to pick dish" << i.Dish <<"  get" << PlayerInfo.dish<< endl;
     if (PlayerInfo.dish == 0)
     {
         pick(TRUE, Dish, i.Dish);
@@ -1934,7 +1948,8 @@ int gotosubmit(Dishpos i)//return1成功提交，return - 1放回原处,return 2
         return 2;//捡起来失败了，继续游荡吧
     }
     if (PlayerInfo.tool != Condiment) {//如果手上没有调料，捡起来试试
-        mystorage.updatestorage();//这个参数没用了，主要看有没有Condiment
+        cout << "try to get condiment" << endl;
+        mystorage.updatestorage();
         if (mystorage.condimentList.empty() == FALSE) 
         {
             cout << "pick condiment" << endl;
@@ -1983,6 +1998,7 @@ int getfoodwhentrick()//从高级产品往低级产品检索，如果捡到了�
     mystorage.updatestorage();
     for (int i = SpicedPot; i >= 1; i--)
     {
+        cout << "getfoodwhentrick " << i << endl;
         if (mystorage.getCnt(DishType(i)) != 0)
         {
             dPoint dest(*mystorage.getStoragePos(DishType(i)).begin());
@@ -1990,7 +2006,7 @@ int getfoodwhentrick()//从高级产品往低级产品检索，如果捡到了�
             Point foodpos(dest.x, dest.y);  //查看食材所在位置
             cout << " trick    get :" << destraw << " in pos " << foodpos.x << "," << foodpos.y << endl;
             gotodest(foodpos);
-            smallmove(foodpos.x, foodpos.y);
+            smallmove(dest.x, dest.y);
             int movex = sgn((int)foodpos.x - (int)PlayerInfo.position.x);
             int movey = sgn((int)foodpos.y - (int)PlayerInfo.position.y);
             cout << "movex:" << movex << "  movey:" << movey << endl;
@@ -2080,12 +2096,16 @@ int throw_darkdish2(int _label)//0:有人在做菜，看看周围有没有可以
     {
         if (i->blockType == 3 && i->dish != 0 && i->dish < OverCookedDish)//如果发现灶台里面有菜,而且不是overcook或者黑暗料理
         {
-            cout << "dish in cook!" << endl;
+            cout << "DISH IN BLOCK  " << i->dish << "  _label  " << _label << "   my cook label " << label <<"  "<< cooklabel[label][4] << endl;
+            if (i->dish == CookingDish)
+            {
+                return 0;//没捡到，这个灶台有人在用，我看看周围有没有菜可以拿走
+            }
             put(1, PI, TRUE);//先把手里的东西放脚下
             move_dir(c);//确保朝向
             pick(FALSE, Block, 0);//尝试拾取
             tSleep(50);
-            cout << "DISH IN BLOCK  " << i->dish << "  _label  " << _label << " label " << label << "  is my cook  " << cooklabel[label][4] << endl;
+
             if (PlayerInfo.dish == 0) 
             {
                 return 0;//没捡到，这个灶台有人在用，我看看周围有没有菜可以拿走
@@ -2152,6 +2172,7 @@ void play() {
             }
             gotodest(Point(cooklabel[label][0], cooklabel[label][1])); //{x,y,编号，朝向，lab
             int randput = rand() % 4 + 1;
+            if (randput == 2 && label == 4) randput = 4;//这个是因为，4灶台网上扔会放在视野外
             //随机放在周围四格，防止被一锅端
             //put(1, angle_4[cooklabel[labelofcook][3]], TRUE);这是原来的定点投放。
             cout << "random put:" << randput;
@@ -2217,7 +2238,8 @@ void play() {
 
             //随机放在周围四格，防止被一锅端
             //put(1, angle_4[cooklabel[labelofcook][3]], TRUE);这是原来的定点投放。
-            cout << "random put:" << randput;
+            if (randput == 2 && label == 4) randput = 4;//这个是因为，4灶台网上扔会放在视野外
+            cout << "rand put " << randput << " in cooklabel : " << label << endl;
             put(1, angle_4[randput], TRUE);
             if (PlayerInfo.tool == Condiment)
             {
@@ -2254,7 +2276,9 @@ void play() {
                         break;
                     case 1:
                         gotodest(Point(cooklabel[label][0], cooklabel[label][1])); //{x,y,编号，朝向，lab
-                        put(1, angle_4[rand()%4+1], TRUE);
+                        if (randput == 2 && label == 4) randput = 4;//这个是因为，4灶台网上扔会放在视野外
+                        cout << "rand put " << randput << " in cooklabel : " << label << endl;
+                        put(1, angle_4[randput], TRUE);
                     }
                    
                 }
