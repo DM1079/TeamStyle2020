@@ -254,7 +254,7 @@ class Storage {
     cout << "***************list end *********************" << endl << endl;
   }
   void cout_storage() {
-    for (auto& i = mstorage.begin(); i != mstorage.end(); i++) {
+    for (auto i = mstorage.begin(); i != mstorage.end(); i++) {
       cout << "Dish:" << i->type << " cnt:" << i->cnt << endl;
     }
   }
@@ -1492,7 +1492,7 @@ int makefood(int food)  //传入目标的编号 whichfood
     list<Obj> l = MapInfo::get_mapcell(cookx, cooky);  //看看灶台里有啥
     for (list<Obj>::iterator i = l.begin(); i != l.end(); i++) {
       auto rawlist = Constant::CookingTable.find(food)->second;
-      if (i->blockType == Dish) {
+      if (i->dish!=0) {
         // i的合成表
         if (find(rawlist.begin(), rawlist.end(), Dish) ==
             rawlist.end())  //没有找到
