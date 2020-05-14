@@ -278,26 +278,33 @@ class Storage {
       mstorage.push_back(StoragePerDish(DishType(i), 0));
 
     get_surround();
-    for (int i = 0; i <= 80; i++) {
-      list<Obj> l = MapInfo::get_mapcell(surround[i][0], surround[i][1]);
-      if (l.empty())continue;
-      for (list<Obj>::iterator i = l.begin(); i != l.end(); i++) {
-          if (i->blockType == 2 && isinclude==0) continue;
-        if (i->dish != 0)  //
+    cout << "get surround finish";
+    for (int k = 0; k <= 80; k++)
+    {
+        cout << " xy pos " << surround[k][0]<<" " << surround[k][1] << endl;
+        list<Obj> l = MapInfo::get_mapcell(surround[k][0], surround[k][1]);
+        if (l.empty())continue;
+        for (list<Obj>::iterator i = l.begin(); i != l.end(); i++)
         {
-          add(i->dish, dPoint(i->position.x, i->position.y));
-          cout << "add dish i=" << i->dish << endl;
+            cout << "not empty" << endl;
+            if (i->blockType == 2 && isinclude == 0) continue;
+            if (i->dish != 0 && i->objType != People)  //别把人手上的食材算进来了
+            {
+                cout << "try add  ";
+                add(i->dish, dPoint(i->position.x, i->position.y));
+                cout <<"obj: "<<i->objType << "  add dish i=" << i->dish <<" pos : "<< i->position.x<<" "<<i->position.y<< endl;
+            }
+            if (i->tool == Condiment && i->objType != People)  //调料放单独一个list吧
+            {
+                cout << "try add  ";
+                addcondiment(dPoint(i->position.x, i->position.y));
+                cout << "add condiment " << endl;
+            }
         }
-        if (i->tool == Condiment)  //调料放单独一个list吧
-        {
-          addcondiment(dPoint(i->position.x, i->position.y));
-          cout << "add condiment " << endl;
-        }
-      }
     }
+    cout << "    add food finish" << endl;
     //对每个食材的poslist排序
     sortAll();
-
     cout << endl << "*****************list begin ********************" << endl;
     for (int j = 10; j <= 21; j++) {
       list<StoragePerDish> st = getRecipe(DishType(j));
@@ -388,6 +395,8 @@ DishType getGoal(list<DishType> raws) {
   return DishType::DishEmpty;
 }
 
+void use_dest(int type, Point dest);
+
 class Astar {
  public:
   Astar() {
@@ -433,9 +442,14 @@ class Astar {
               if (result.empty())
                   continue;  // out of sight or the map
               for (auto obj : result)
-                  if (obj.objType == People) {
+                  if (obj.objType == People && x != int(PlayerInfo.position.x) && y != int(PlayerInfo.position.y))
+                  {
                       setmap(x, y, 1);  // marked as impassable
                       cout << "meet people in " << x << "," << y << endl;
+                      if ((PlayerInfo.tool == Bow || PlayerInfo.tool == Bow)&& obj.team!=PlayerInfo.team )
+                      {
+                          use_dest(1, Point(obj.position.x, obj.position.y));
+                      }
                       break;
                   }
           }
@@ -882,6 +896,18 @@ Point getnear(Point dest)
 
 int gotodest(Point dest, int istimelimited = 0, int getdish = 0)  //默认不限制，如果限制，把20000改成cooklabel[4]-5000,返回值为1表示成功,返回0表示中断
 {//getdish=1~8表示沿路定向捡食材，-1表示沿路随机捡
+
+    if (dest.x > 50 || dest.x < 0)
+    {
+        tSleep(5);
+        return 0;
+    }
+    if (dest.y > 50 || dest.y < 0)
+    {
+        tSleep(5);
+        return 0;
+    }
+
     list<char>::iterator lp;
     int x = dest.x;
     int y = dest.y;
@@ -1013,6 +1039,10 @@ int gotodest(Point dest, int istimelimited = 0, int getdish = 0)  //默认不限
                             tUse(1, 0, 0);
                             tSleep(50);
                         }
+                    case ThrowHammer:
+                    case Bow:
+                        tPick(TRUE, Tool, t);
+                        tSleep(50);
                     default:
                         break;
                     }
@@ -1506,6 +1536,17 @@ double angle_abs(Point dest)  //啊 是弧度
   }                    //不知道=0会不会崩，偏一点点吧。
   return atan2(y, x);  // atan2返回弧度
 }
+
+void use_dest(int type, Point dest)  //计算从当前位置到目标位置，需要的角度和距离,目标x+0.5,y+0.5才是中心点
+{
+    double angle = angle_abs(dest);
+    double dis = calcdis(dest);
+    cout << "use:" << PlayerInfo.tool << " dis=" << dis << "   angle:" << angle << endl;
+    tUse(type, dis, angle);
+    tSleep(50);
+    return;
+}
+
 void put_dest(Point dest,bool isdish)  //计算从当前位置到目标位置，需要的角度和距离,目标x+0.5,y+0.5才是中心点
 {
   double angle = angle_abs(dest);
@@ -2487,7 +2528,7 @@ void play() {
             default:randlabel++;
                 break;
             }
-            if (randlabel >= 5) randlabel ==randlabel - 4;
+            if (randlabel >= 5) randlabel = randlabel - 4;
             if (randlabel == 0) randlabel = 4;
         }
         else
@@ -2500,8 +2541,9 @@ void play() {
         {
             c = 2 * (rand() % 2 == 0);
         }
-        if (tricklabel != 0)
+        if (tricklabel != 0 && tricklabel<=4)
         {
+            cout << "tricklabel != 0 !! " <<tricklabel<<endl;
             randlabel == tricklabel;
             c = 2;//如果记录了可以到捣乱的灶台，就捣乱。
         }

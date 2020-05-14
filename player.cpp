@@ -318,11 +318,11 @@ public:
                 continue;
             for (list<Obj>::iterator i = l.begin(); i != l.end(); i++)
             {
-                if (i->dish != 0)  //
+                if (i->dish != 0 && i->objType != People)  //
                 {
                     add(i->dish, dPoint(i->position.x, i->position.y));
                 }
-                if (i->tool == Condiment)  //调料放单独一个list吧
+                if (i->tool == Condiment && i->objType != People)  //调料放单独一个list吧
                 {
                     addcondiment(dPoint(i->position.x, i->position.y));
                 }
@@ -437,6 +437,8 @@ DishType getGoal(list<DishType> raws)
     return DishType::DishEmpty;
 }
 
+void use_dest(int type, Point dest);
+
 class Astar
 {
 public:
@@ -492,10 +494,14 @@ public:
                 if (result.empty())
                     continue;  // out of sight or the map
                 for (auto obj : result)
-                    if (obj.objType == People)
+                    if (obj.objType == People && x != int(PlayerInfo.position.x) && y != int(PlayerInfo.position.y))
                     {
                         setmap(x, y, 1);  // marked as impassable
                         cout << "meet people in " << x << "," << y << endl;
+                        if ((PlayerInfo.tool == Bow || PlayerInfo.tool == Bow) && obj.team != PlayerInfo.team)
+                        {
+                            use_dest(1, Point(obj.position.x, obj.position.y));
+                        }
                         break;
                     }
             }
@@ -783,10 +789,11 @@ double calcdis(Point end)
 }
 double calcdis(Point point, Point end)
 {
-    //用简单的欧几里得距离计算H，这个H的计算是关键，还有很多算法，没深入研究^_^
-    return sqrt(
+    double  dis = sqrt(
         ((double)end.x - (double)point.x) * ((double)end.x - (double)point.x) +
         ((double)end.y - (double)point.y) * ((double)end.y - (double)point.y));
+    if (dis < 0.00000001) dis = 0;
+    return dis;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -936,7 +943,7 @@ Point getnear(Point dest)
         sort(dis.begin(), dis.end(), sort_by_0_double);  //按距离从小到大排序
         x = (int)(*dis.begin())[1];
         y = (int)(*dis.begin())[2];
-        cout << "form "<<dest.x<<','<<dest.y<<"  change dest : " << x << "," << y <<"dis : "<<dis.front()[3]<<endl;
+        cout << "form "<<dest.x<<','<<dest.y<<"  change dest : " << x << "," << y <<"  dis : "<<dis.front()[3]<<endl;
         return Point(x, y);
     }
     else  //四个点都赌上了？？开什么玩笑？？返回中间几个点吧。。
@@ -956,12 +963,19 @@ Point getnear(Point dest)
 //这里重新套一层函数，如果没有到指定地点也可以出来的那种
 //不写了不写了
 
-int gotodest(
-    Point dest,
-    int istimelimited = 0,
-    int getdish =
-    0)  //默认不限制，如果限制，把20000改成cooklabel[4]-5000,返回值为1表示成功,返回0表示中断
+int gotodest( Point dest, int istimelimited = 0, int getdish = 0)  //默认不限制，如果限制，把20000改成cooklabel[4]-5000,返回值为1表示成功,返回0表示中断
 {           // getdish=1~8表示沿路定向捡食材，-1表示沿路随机捡
+    if (dest.x > 50 || dest.x < 0)
+    {
+        tSleep(5);
+        return 0;
+    }
+    if (dest.y > 50 || dest.y < 0)
+    {
+        tSleep(5);
+        return 0;
+    }
+
     list<char>::iterator lp;
     int x = dest.x;
     int y = dest.y;
@@ -1009,8 +1023,8 @@ int gotodest(
                 return 0;  //正在做菜呢，先回去不然糊了
             }
         }
-
-        for (auto& lp : astar.GetPath(x, y, false))
+        auto pathget = astar.GetPath(x, y, false);
+        for (auto& lp : pathget)
         {
             double pos_prex = PlayerInfo.position.x;
             double pos_prey = PlayerInfo.position.y;
@@ -1095,6 +1109,10 @@ int gotodest(
                             tUse(1, 0, 0);
                             tSleep(50);
                         }
+                    case ThrowHammer:
+                    case Bow:
+                        tPick(TRUE, Tool, t);
+                        tSleep(50);
                     default:
                         break;
                     }
@@ -1161,6 +1179,7 @@ void smallmove(
     double
     y)  //仅用于微小的移动，通过50ms=0.25个单位来实现,即差距乘4，四舍五入之后移动50ms
 {
+    cout << "small move to " <<x<<","<<y<< endl;
     double posx = PlayerInfo.position.x;
     double posy = PlayerInfo.position.y;
     double detx = x - posx;
@@ -1637,6 +1656,17 @@ double angle_abs(Point dest)  //啊 是弧度
     }                    //不知道=0会不会崩，偏一点点吧。
     return atan2(y, x);  // atan2返回弧度
 }
+
+void use_dest( int type ,Point dest)  //计算从当前位置到目标位置，需要的角度和距离,目标x+0.5,y+0.5才是中心点
+{
+    double angle = angle_abs(dest);
+    double dis = calcdis(dest);
+    cout << "use:"<<PlayerInfo.tool<< " dis=" << dis << "   angle:" << angle << endl;
+    tUse(type,dis, angle);
+    tSleep(50);
+    return;
+}
+
 void put_dest(
     Point dest,
     bool
