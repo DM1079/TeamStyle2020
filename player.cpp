@@ -240,7 +240,7 @@ public:
 
     void add(DishType _dishType, dPoint _pos)
     {
-        if (_dishType == 0)
+        if (_dishType == 0 || _dishType >= DishSize3)
             return;
         mstorage[int(_dishType)].cnt += 1;
         mstorage[int(_dishType)].posList.push_back(dPoint(_pos));
@@ -311,9 +311,10 @@ public:
             mstorage.push_back(StoragePerDish(DishType(i), 0));
 
         get_surround();
-        for (int i = 0; i <= 80; i++)
+        for (int k = 0; k <= 80; k++)
         {
-            list<Obj> l = MapInfo::get_mapcell(surround[i][0], surround[i][1]);
+            if (surround[k][0] <= 0 || surround[k][0] >= 49 || surround[k][1] <= 0 || surround[k][1] >= 49) continue;
+            list<Obj> l = MapInfo::get_mapcell(surround[k][0], surround[k][1]);
             if (l.empty())
                 continue;
             for (list<Obj>::iterator i = l.begin(); i != l.end(); i++)
@@ -501,6 +502,7 @@ public:
                         if ((PlayerInfo.tool == Bow || PlayerInfo.tool == Bow) && obj.team != PlayerInfo.team)
                         {
                             use_dest(1, Point(obj.position.x, obj.position.y));
+                            tSleep(50);
                         }
                         break;
                     }
@@ -2046,6 +2048,7 @@ int commitTask()
     int randpoint = rand() % 2;
     Point destsubmit(26, 24 + randpoint);  //随机去两个点之一交任务
     Point save = findsave();  //准备最近的藏匿点，并且发消息告诉队友
+
     if (find(task_list.begin(), task_list.end(), PlayerInfo.dish) !=
         task_list.end() ||
         (PlayerInfo.dish >= SpicedPot && PlayerInfo.dish <= SpicedPot6 &&

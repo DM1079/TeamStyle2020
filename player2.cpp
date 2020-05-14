@@ -89,7 +89,7 @@ int cooking[6] = {0, 0, 0,
 int state = 0;
 int label;  //记录“据点”是第几个灶台
 int oldlabel = 0;
-int surround[80][2];  //懒得考虑返回值了，直接全局变量
+int surround[81][2];  //懒得考虑返回值了，直接全局变量
 
 double calcdis(Point point, Point end);
 void get_all_dish(int _label);
@@ -222,12 +222,12 @@ class Storage {
   }
 
   void add(DishType _dishType, dPoint _pos) {
-    if (_dishType == 0)
+    if (_dishType == 0 || _dishType>=DishSize3)
       return;
     mstorage[int(_dishType)].cnt += 1;
     mstorage[int(_dishType)].posList.push_back(dPoint(_pos));
   }
-  void addcondiment(dPoint _pos) {  //调料放31吧
+  void addcondiment(dPoint _pos) {  
     condimentList.push_back(_pos);
   }
   int getCnt(DishType _dishType) { return mstorage[int(_dishType)].cnt; }
@@ -282,6 +282,7 @@ class Storage {
     for (int k = 0; k <= 80; k++)
     {
         cout << " xy pos " << surround[k][0]<<" " << surround[k][1] << endl;
+        if (surround[k][0] <= 0 || surround[k][0] >= 49 || surround[k][1] <= 0 || surround[k][1] >= 49) continue;
         list<Obj> l = MapInfo::get_mapcell(surround[k][0], surround[k][1]);
         if (l.empty())continue;
         for (list<Obj>::iterator i = l.begin(); i != l.end(); i++)
@@ -291,8 +292,9 @@ class Storage {
             if (i->dish != 0 && i->objType != People)  //别把人手上的食材算进来了
             {
                 cout << "try add  ";
+                cout << "obj: " << i->objType << "  add dish i=" << i->dish << " pos : " << i->position.x << " " << i->position.y << endl;
                 add(i->dish, dPoint(i->position.x, i->position.y));
-                cout <<"obj: "<<i->objType << "  add dish i=" << i->dish <<" pos : "<< i->position.x<<" "<<i->position.y<< endl;
+                cout << "add finish" << endl;
             }
             if (i->tool == Condiment && i->objType != People)  //调料放单独一个list吧
             {
@@ -446,9 +448,10 @@ class Astar {
                   {
                       setmap(x, y, 1);  // marked as impassable
                       cout << "meet people in " << x << "," << y << endl;
-                      if ((PlayerInfo.tool == Bow || PlayerInfo.tool == Bow)&& obj.team!=PlayerInfo.team )
+                      if ((PlayerInfo.tool == Bow || PlayerInfo.tool == ThrowHammer)&& obj.team!=PlayerInfo.team )
                       {
                           use_dest(1, Point(obj.position.x, obj.position.y));
+                          tSleep(50);
                       }
                       break;
                   }
@@ -959,8 +962,8 @@ int gotodest(Point dest, int istimelimited = 0, int getdish = 0)  //默认不限
                 return 0;  //正在做菜呢，先回去不然糊了
             }
         }
-
-        for (auto& lp : astar.GetPath(x, y, false))
+        auto pathget = astar.GetPath(x, y, false);
+        for (auto& lp :pathget)
         {
 
             double pos_prex = PlayerInfo.position.x;
@@ -2330,6 +2333,7 @@ int trick(int _label,int res)//_label是被捣乱的编号,把这个灶台周围
     cout << "dish in player 2 :" << PlayerInfo.dish << endl;
     if (PlayerInfo.dish == 0)
     {
+        cout << " no dish   set tricklabel=0" << endl;
         tricklabel =0;
         return 0;//无事发生
     }
@@ -2537,14 +2541,14 @@ void play() {
         }
         int c = can_submit();// return1成功提交，return - 1放回原处,return 2没捡到菜， return 0没有可以提交的任务。
         // return 0是常态吧 如果0那就随机给50%的概率取捣乱。
-        if (c == 0)
+        if (c == 0 || 1)
         {
             c = 2 * (rand() % 2 == 0);
         }
         if (tricklabel != 0 && tricklabel<=4)
         {
             cout << "tricklabel != 0 !! " <<tricklabel<<endl;
-            randlabel == tricklabel;
+            randlabel = tricklabel;
             c = 2;//如果记录了可以到捣乱的灶台，就捣乱。
         }
         int randput = rand() % 4 + 1;
@@ -2555,6 +2559,7 @@ void play() {
         {
         case 1:
         case 0:
+            cout << " go to get food with c = " << c <<" tricklabel = "<<tricklabel<< endl;
             gotodest(foodpos);
             movex = sgn((int)foodpos.x - (int)PlayerInfo.position.x);
             movey = sgn((int)foodpos.y - (int)PlayerInfo.position.y);
